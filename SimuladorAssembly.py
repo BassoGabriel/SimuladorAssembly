@@ -1,9 +1,20 @@
 #instruções específica que precisa estar no código LI
 
 
-#reconhecimento de arquivos
 import tkinter as tk
+from tkinter import messagebox
 from tkinter import filedialog
+
+# Funções que serão chamadas ao clicar nos botões
+def botao1_clique():
+    #messagebox.showinfo("Botão 1", "Você clicou no Botão 1!")
+    escolher_e_ler_arquivo()
+
+def botao2_clique():
+    messagebox.showinfo("Botão 2", "Você clicou no Botão 2!")
+
+#reconhecimento de arquivos
+
 
 def escolher_e_ler_arquivo():
     # Cria uma janela oculta do tkinter
@@ -28,6 +39,16 @@ def escolher_e_ler_arquivo():
     print("Conteúdo do arquivo:")
     print(conteudo)
 
-escolher_e_ler_arquivo()
+# Criando a janela principal
+janela = tk.Tk()
+janela.title("Minha Janela com Botões")
+janela.geometry("300x150")  # Largura x Altura
 
+# Criando os botões
+botao1 = tk.Button(janela, text="Botão 1", command=botao1_clique)
+botao1.pack(pady=10)
 
+botao2 = tk.Button(janela, text="Botão 2", command=botao2_clique)
+botao2.pack(pady=10)
+
+janela.mainloop()
