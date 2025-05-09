@@ -1,21 +1,33 @@
 #instruções específica que precisa estar no código LI
 
 
-# Funções aritméticas
-def add(s1, s2, s3):
-    s1 = s2 + s3
-    return s1
+#reconhecimento de arquivos
+import tkinter as tk
+from tkinter import filedialog
 
-def sub(s1, s2, s3):
-    s1 = s2 - s3
-    return s1
+def escolher_e_ler_arquivo():
+    # Cria uma janela oculta do tkinter
+    root = tk.Tk()
+    root.withdraw()  # Esconde a janela principal
 
-def addi(s1, s2):
-    s1 = s2 + 20
-    return s1
+    # Abre a caixa de diálogo para escolher um arquivo
+    caminho_arquivo = filedialog.askopenfilename(
+        title="Selecione um arquivo",
+        filetypes=[("Todos os arquivos", "*.*"), ("Arquivos de texto", "*.txt")]
+    )
 
+    # Verifica se o usuário selecionou um arquivo
+    if not caminho_arquivo:
+        print("Nenhum arquivo foi selecionado.")
+        return
 
-#conversores 
-def hex_to_bin(hex_num):
-    return bin(int(hex_num, 16))[2:].zfill(8)
+    # Lê o conteúdo do arquivo
+    with open(caminho_arquivo, 'r', encoding='utf-8') as arquivo:
+        conteudo = arquivo.read()
+
+    print("Conteúdo do arquivo:")
+    print(conteudo)
+
+escolher_e_ler_arquivo()
+
 
