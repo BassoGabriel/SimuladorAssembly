@@ -41,14 +41,15 @@ def escolher_e_ler_arquivo():
 
 # Criando a janela principal
 janela = tk.Tk()
-janela.title("Minha Janela com Botões")
-janela.geometry("300x150")  # Largura x Altura
+janela.title("SIMULADOR DE ASSEMBLY")
+janela.configure(bg="black")  # Cor de fundo da janela
+janela.geometry("1024x600")  # Largura x Altura
 
 # Criando os botões
-botao1 = tk.Button(janela, text="Botão 1", command=botao1_clique)
-botao1.pack(pady=10)
+botao1 = tk.Button(janela, text="LOAD FILE", command=botao1_clique)
+botao1.place(x=10, y=0, width=70, height=30) 
 
-botao2 = tk.Button(janela, text="Botão 2", command=botao2_clique)
-botao2.pack(pady=10)
+botao2 = tk.Button(janela, text="NEXT INSTRUCTION", command=botao2_clique)
+botao2.place(x=90, y=0, width=120, height=30)  
 
 janela.mainloop()
