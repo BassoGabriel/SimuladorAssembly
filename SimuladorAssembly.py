@@ -13,7 +13,7 @@ def escolher_e_ler_arquivo():
     # Abre a caixa de diálogo para escolher um arquivo
     caminho_arquivo = filedialog.askopenfilename(
         title="Selecione um arquivo",
-        filetypes=[("Todos os arquivos", "*.*"), ("Arquivos de texto", "*.txt")]
+        filetypes=[("Assembly Files", "*.asm*")]
     )
 
     # Verifica se o usuário selecionou um arquivo
