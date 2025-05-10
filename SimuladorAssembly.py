@@ -2,6 +2,7 @@
 
 
 import tkinter as tk
+import pandas as pd
 from tkinter import messagebox
 from tkinter import filedialog
 
@@ -42,7 +43,7 @@ def escolher_e_ler_arquivo():
 # Criando a janela principal
 janela = tk.Tk()
 janela.title("SIMULADOR DE ASSEMBLY")
-janela.configure(bg="black")  # Cor de fundo da janela
+janela.configure(bg="silver")  # Cor de fundo da janela
 janela.geometry("1024x600")  # Largura x Altura
 
 # Criando os botões
@@ -51,5 +52,6 @@ botao1.place(x=10, y=0, width=70, height=30)
 
 botao2 = tk.Button(janela, text="NEXT INSTRUCTION", command=botao2_clique)
 botao2.place(x=90, y=0, width=120, height=30)  
+
 
 janela.mainloop()
