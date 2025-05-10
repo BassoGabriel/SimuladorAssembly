@@ -1,7 +1,10 @@
 main:
-    lw $t0, 0($t1)
-    lw $t1, 10
-    add $t2, $t0, $t1
-    sw $t2, resultado
-    add $t1, $t2, $t3
-
+lw $t0, valor1
+lw $t1, valor2
+beq $t0, $t1, igual
+add $t2, $t0, $t1
+j fim
+igual:
+sub $t2, $t0, $t1
+fim:
+sw $t2, resultado
