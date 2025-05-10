@@ -18,7 +18,7 @@ janela.title("TABELA COM PANDAS")
 frame_tabela = tk.Frame(janela)
 frame_tabela.pack(fill="both", expand=True)
 
-tabela = Table(frame_tabela, dataframe=df, showtoolbar=True, showstatusbar=True)
+tabela = Table(frame_tabela, dataframe=df, showtoolbar=False, showstatusbar=False)
 tabela.show()
 
 janela.mainloop()
