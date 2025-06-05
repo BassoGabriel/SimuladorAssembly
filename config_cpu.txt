@@ -1,0 +1,4 @@
+clock_ciclo_ms=1
+tempo_tipo_I=2
+tempo_tipo_R=3
+tempo_tipo_J=4

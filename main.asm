@@ -1,10 +1,7 @@
+Config_CPU=[ 20GHZ, I=1, J=2, R=1 ]
+
 main:
-lw $t0, valor1
-lw $t1, valor2
-beq $t0, $t1, igual
+lw $t0, 0($s0)
+lw $t1, 4($s0)
 add $t2, $t0, $t1
-j fim
-igual:
-sub $t2, $t0, $t1
-fim:
-sw $t2, resultado
+sw $t2, 8($s0)

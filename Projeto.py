@@ -1,5 +1,4 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
+import re
 
 # --- Leitura do arquivo .asm ---
 def ler_codigo_assembly(caminho_arquivo):
@@ -10,7 +9,7 @@ def ler_codigo_assembly(caminho_arquivo):
             linha_index = 0
             for linha in arquivo:
                 linha = linha.strip()
-                if not linha or linha.startswith('#') or linha.startswith('.'):
+                if not linha or linha.startswith('#') or linha.startswith('.') or linha.startswith("Config_CPU"):
                     continue
                 while ':' in linha:
                     partes = linha.split(':', 1)
@@ -21,10 +20,10 @@ def ler_codigo_assembly(caminho_arquivo):
                     instrucoes.append(linha)
                     linha_index += 1
     except FileNotFoundError:
-        print("Arquivo nao encontrado. Verifique o caminho.")
+        print("Arquivo não encontrado.")
     return instrucoes, rotulos
 
-# --- Leitura do arquivo de configuração ---
+# --- Leitura da linha de configuração dentro do .asm ---
 def ler_configuracao_cpu(caminho_arquivo):
     config = {
         "clock_ciclo_ms": 1,
@@ -32,20 +31,42 @@ def ler_configuracao_cpu(caminho_arquivo):
         "tempo_tipo_R": 1,
         "tempo_tipo_J": 1
     }
+
     try:
         with open(caminho_arquivo, "r") as f:
             for linha in f:
-                if "=" in linha:
-                    chave, valor = linha.strip().split("=")
-                    if chave in config:
-                        config[chave] = int(valor)
+                linha = linha.strip()
+                if linha.startswith("Config_CPU"):
+                    match = re.search(r"Config_CPU=\[\s*(\d+)(GHZ|MHZ),\s*I=(\d+),\s*J=(\d+),\s*R=(\d+)\s*\]", linha, re.IGNORECASE)
+                    if match:
+                        freq_valor = int(match.group(1))
+                        freq_unidade = match.group(2).upper()
+                        config["tempo_tipo_I"] = int(match.group(3))
+                        config["tempo_tipo_J"] = int(match.group(4))
+                        config["tempo_tipo_R"] = int(match.group(5))
+
+                        ciclos_por_segundo = freq_valor * (1_000_000_000 if freq_unidade == "GHZ" else 1_000_000)
+                        config["clock_ciclo_ms"] = 1000 / ciclos_por_segundo
+                        print("CLOCK por ciclo:", config["clock_ciclo_ms"])
     except:
-        print("Arquivo de configuração não encontrado. Usando valores padrão.")
+        print("Erro ao ler configuração. Usando padrão.")
     return config
 
-# --- Parser das instruções ---
+# --- Mapeamento de registradores ---
+mapa_registradores = {
+    '$zero': 0, '$at': 1, '$v0': 2, '$v1': 3,
+    '$a0': 4, '$a1': 5, '$a2': 6, '$a3': 7,
+    '$t0': 8, '$t1': 9, '$t2': 10, '$t3': 11,
+    '$t4': 12, '$t5': 13, '$t6': 14, '$t7': 15,
+    '$s0': 16, '$s1': 17, '$s2': 18, '$s3': 19,
+    '$s4': 20, '$s5': 21, '$s6': 22, '$s7': 23,
+    '$t8': 24, '$t9': 25, '$k0': 26, '$k1': 27,
+    '$gp': 28, '$sp': 29, '$fp': 30, '$ra': 31
+}
+
+# --- Parser de instruções ---
 def identificar_instrucao(instrucao):
-    partes = instrucao.replace(',', '').split()
+    partes = instrucao.replace(',', '').replace('(', ' ').replace(')', '').split()
     if not partes:
         return None
     opcode = partes[0].lower()
@@ -54,33 +75,21 @@ def identificar_instrucao(instrucao):
     tipo_j = {'j'}
     if opcode in tipo_r and len(partes) == 4:
         return {
-            'tipo': 'R',
-            'opcode': opcode,
-            'destino': partes[1],
-            'origem1': partes[2],
-            'origem2': partes[3]
+            'tipo': 'R', 'opcode': opcode,
+            'destino': partes[1], 'origem1': partes[2], 'origem2': partes[3]
         }
     elif opcode in tipo_i and len(partes) >= 3:
         return {
-            'tipo': 'I',
-            'opcode': opcode,
-            'destino': partes[1],
-            'origem': partes[2],
+            'tipo': 'I', 'opcode': opcode,
+            'destino': partes[1], 'origem': partes[2],
             'imediato': partes[3] if len(partes) > 3 else '0'
         }
     elif opcode in tipo_j and len(partes) == 2:
         return {
-            'tipo': 'J',
-            'opcode': opcode,
+            'tipo': 'J', 'opcode': opcode,
             'label': partes[1]
         }
     return None
-
-# --- Mapeamento de registradores ---
-mapa_registradores = {
-    '$zero': 0, '$t0': 8, '$t1': 9, '$t2': 10, '$t3': 11,
-    '$t4': 12, '$t5': 13, '$t6': 14, '$t7': 15, '$t8': 24, '$t9': 25
-}
 
 # --- Conversões ---
 def to_bin(numero, bits):
@@ -104,8 +113,8 @@ def instrucao_tipo_i_para_bin(instrucao):
     rs = to_bin(mapa_registradores.get(instrucao['origem'], 0), 5)
     rt = to_bin(mapa_registradores.get(instrucao['destino'], 0), 5)
     try:
-        imediato = int(instrucao.get('imediato', '0'))
-    except:
+        imediato = int(instrucao['imediato'])
+    except ValueError:
         imediato = 0
     imm = to_bin(imediato & 0xFFFF, 16)
     binario = opcode + rs + rt + imm
@@ -114,175 +123,128 @@ def instrucao_tipo_i_para_bin(instrucao):
 
 def instrucao_tipo_j_para_bin(instrucao, rotulos):
     opcode = '000010'
-    label = instrucao.get('label', '')
-    endereco = rotulos.get(label, 0)
-    endereco_jump = endereco
-    endereco_bin = to_bin(endereco_jump, 26)
+    endereco = rotulos.get(instrucao.get('label', ''), 0)
+    endereco_bin = to_bin(endereco, 26)
     binario = opcode + endereco_bin
     hexadecimal = f"0x{int(binario, 2):08X}"
     return binario, hexadecimal
 
-# --- Dados do simulador ---
-estado_simulador = {
-    'codigo': [],
-    'rotulos': {},
-    'PC': 0,
-    'registradores': {},
-    'memoria': {},
-    'config': {},
-    'tempo_total': 0
-}
-
-# --- Execução passo a passo ---
-def executar_proxima_instrucao(saida_text):
-    estado = estado_simulador
-    PC = estado['PC']
-    if PC >= len(estado['codigo']):
-        saida_text.insert(tk.END, "Fim da execução.\n")
-        mostrar_estado_final(saida_text)
-        return
-    linha = estado['codigo'][PC]
-    instrucao = identificar_instrucao(linha)
-    if instrucao:
-        saida_text.insert(tk.END, f"[PC = {PC*4}] Executando: {linha}\n")
-        estado['PC'] = executar(instrucao, estado['registradores'], estado['memoria'], estado['rotulos'], PC, saida_text)
-        tipo = instrucao['tipo']
-        tempo_instrucao = estado['config'][f"tempo_tipo_{tipo}"]
-        estado['tempo_total'] += tempo_instrucao
-        saida_text.insert(tk.END, f"Tempo da instrução: {tempo_instrucao} ciclos\n")
-        saida_text.insert(tk.END, "-"*40 + "\n")
-
-# --- Execução completa ---
-def executar_tudo(saida_text):
-    while estado_simulador['PC'] < len(estado_simulador['codigo']):
-        executar_proxima_instrucao(saida_text)
-
-# --- Mostrar estado final ---
-def mostrar_estado_inicial(saida_text):
-    saida_text.insert(tk.END, "--- Registradores Iniciais ---\n")
-    todos_registradores = {
-        '$zero': 0, '$at': 1, '$v0': 2, '$v1': 3,
-        '$a0': 4, '$a1': 5, '$a2': 6, '$a3': 7,
-        '$t0': 8, '$t1': 9, '$t2': 10, '$t3': 11,
-        '$t4': 12, '$t5': 13, '$t6': 14, '$t7': 15,
-        '$s0': 16, '$s1': 17, '$s2': 18, '$s3': 19,
-        '$s4': 20, '$s5': 21, '$s6': 22, '$s7': 23,
-        '$t8': 24, '$t9': 25, '$k0': 26, '$k1': 27,
-        '$gp': 28, '$sp': 29, '$fp': 30, '$ra': 31
-    }
-    for nome, numero in todos_registradores.items():
-        val = estado_simulador['registradores'].get(nome, 0)
-        saida_text.insert(tk.END, f"{nome:>5} ({numero:>2}): 0x{val:08X}\n")
-
-    saida_text.insert(tk.END, "\n--- Memória Inicial ---\n")
-    for endereco, valor in estado_simulador['memoria'].items():
-        saida_text.insert(tk.END, f"{endereco:>10}: 0x{valor:08X}\n")
-    
-    saida_text.insert(tk.END, "-" * 50 + "\n\n")
-
-
-
-# --- Carregar programa ---
-def carregar_programa(saida_text):
-    caminho_asm = filedialog.askopenfilename(filetypes=[("Assembly Files", "*.asm")])
-    if not caminho_asm:
-        return
-    try:
-        codigo, rotulos = ler_codigo_assembly(caminho_asm)
-        config = ler_configuracao_cpu("config_cpu.txt")
-        registradores = {
-            '$t0': 0, '$t1': 0, '$t2': 0, '$t3': 0, '$t4': 0,
-            '$t5': 0, '$t6': 0, '$t7': 0, '$t8': 0, '$t9': 0
-        }
-        memoria = {'valor1': 5, 'valor2': 10, 'resultado': 0}
-        estado_simulador.update({
-            'codigo': codigo,
-            'rotulos': rotulos,
-            'PC': 0,
-            'registradores': registradores,
-            'memoria': memoria,
-            'config': config,
-            'tempo_total': 0
-        })
-        saida_text.delete(1.0, tk.END)
-        saida_text.insert(tk.END, "Programa carregado com sucesso.\nClique em 'Próxima Instrução' ou 'Executar Tudo' para iniciar.\n")
-        mostrar_estado_inicial(saida_text)
-
-    except Exception as e:
-        messagebox.showerror("Erro", str(e))
-
-# --- Resto do código (função executar igual ao original) ---
-def executar(instrucao, registradores, memoria, rotulos, pc_atual, saida_text):
+# --- Execução de instruções ---
+def executar(instrucao, registradores, memoria, rotulos, pc_atual):
     tipo = instrucao['tipo']
     opcode = instrucao['opcode']
     proximo_pc = pc_atual + 1
 
     if tipo == 'R':
-        rd = instrucao['destino']
-        rs = instrucao['origem1']
-        rt = instrucao['origem2']
+        rd, rs, rt = instrucao['destino'], instrucao['origem1'], instrucao['origem2']
         if opcode == 'add':
             registradores[rd] = registradores[rs] + registradores[rt]
         elif opcode == 'sub':
             registradores[rd] = registradores[rs] - registradores[rt]
-        saida_text.insert(tk.END, f"{opcode.upper()} {rd} = {registradores[rd]}\n")
-        binario, hexadecimal = instrucao_tipo_r_para_bin(instrucao)
-        saida_text.insert(tk.END, f"Binario: {binario}\nHex:     {hexadecimal}\n")
 
     elif tipo == 'I':
         rt = instrucao['destino']
         rs = instrucao['origem']
-        if opcode == 'lw':
-            if rs in memoria:
-                registradores[rt] = memoria[rs]
-                saida_text.insert(tk.END, f"LW {rt} <- MEM[{rs}] = {registradores[rt]}\n")
-        elif opcode == 'sw':
-            if rs in memoria:
-                memoria[rs] = registradores[rt]
-                saida_text.insert(tk.END, f"SW MEM[{rs}] <- {rt} = {memoria[rs]}\n")
+        if opcode in {'lw', 'sw'}:
+            try:
+                offset = int(instrucao['imediato'])
+            except ValueError:
+                offset = 0
+            base = registradores.get(rs, 0)
+            endereco = base + offset
+            endereco_hex = f"0x{endereco:08X}"
+            if opcode == 'lw':
+                registradores[rt] = memoria.get(endereco_hex, 0)
+            elif opcode == 'sw':
+                memoria[endereco_hex] = registradores[rt]
         elif opcode == 'beq':
             if registradores[rt] == registradores[rs]:
                 label = instrucao['imediato']
                 if label in rotulos:
-                    saida_text.insert(tk.END, f"BEQ: {rt} == {rs}, saltando para {label}\n")
                     proximo_pc = rotulos[label]
-                else:
-                    saida_text.insert(tk.END, f"Erro: label '{label}' não encontrado.\n")
-            else:
-                saida_text.insert(tk.END, f"BEQ: {rt} != {rs}, nao salta.\n")
-        binario, hexadecimal = instrucao_tipo_i_para_bin(instrucao)
-        saida_text.insert(tk.END, f"Binario: {binario}\nHex:     {hexadecimal}\n")
 
     elif tipo == 'J':
         label = instrucao['label']
         if label in rotulos:
-            saida_text.insert(tk.END, f"J: saltando para {label}\n")
             proximo_pc = rotulos[label]
-        else:
-            saida_text.insert(tk.END, f"Erro: label '{label}' não encontrado.\n")
-        binario, hexadecimal = instrucao_tipo_j_para_bin(instrucao, rotulos)
-        saida_text.insert(tk.END, f"Binario: {binario}\nHex:     {hexadecimal}\n")
 
     return proximo_pc
 
-# --- Janela principal ---
-janela = tk.Tk()
-janela.title("Simulador Assembly")
-janela.geometry("800x600")
+# --- Execução completa ---
+def executar_tudo(estado):
+    saida = []
+    while estado['PC'] < len(estado['codigo']):
+        linha = estado['codigo'][estado['PC']]
+        instrucao = identificar_instrucao(linha)
+        if instrucao:
+            etapa = {
+                'pc': estado['PC'] * 4,
+                'linha': linha,
+                'tempo_instrucao': estado['config'][f"tempo_tipo_{instrucao['tipo']}"],
+                'registradores': estado['registradores'].copy(),
+                'memoria': estado['memoria'].copy()
+            }
+            tipo = instrucao['tipo']
+            if tipo == 'R':
+                etapa['binario'], etapa['hex'] = instrucao_tipo_r_para_bin(instrucao)
+            elif tipo == 'I':
+                etapa['binario'], etapa['hex'] = instrucao_tipo_i_para_bin(instrucao)
+            elif tipo == 'J':
+                etapa['binario'], etapa['hex'] = instrucao_tipo_j_para_bin(instrucao, estado['rotulos'])
 
-frame_topo = tk.Frame(janela)
-frame_topo.pack(pady=10)
+            estado['tempo_total'] += etapa['tempo_instrucao']
+            estado['PC'] = executar(instrucao, estado['registradores'], estado['memoria'], estado['rotulos'], estado['PC'])
+            saida.append(etapa)
+        else:
+            estado['PC'] += 1
 
-saida_text = scrolledtext.ScrolledText(janela, width=95, height=30)
-saida_text.pack(padx=10, pady=10)
+    return {
+        'etapas': saida,
+        'registradores_finais': estado['registradores'],
+        'memoria_final': estado['memoria'],
+        'tempo_total': estado['tempo_total'],
+        'tempo_total_ms': estado['tempo_total'] * estado['config']['clock_ciclo_ms']
+    }
 
-botao_carregar = tk.Button(frame_topo, text="Carregar .ASM", command=lambda: carregar_programa(saida_text))
-botao_carregar.pack(side=tk.LEFT, padx=5)
+# --- Execução local para testes ---
+if __name__ == "__main__":
+    caminho = "main.asm"
+    codigo, rotulos = ler_codigo_assembly(caminho)
+    config = ler_configuracao_cpu(caminho)
 
-botao_proxima = tk.Button(frame_topo, text="Próxima Instrução", command=lambda: executar_proxima_instrucao(saida_text))
-botao_proxima.pack(side=tk.LEFT, padx=5)
+    estado = {
+        'codigo': codigo,
+        'rotulos': rotulos,
+        'PC': 0,
+        'registradores': {
+            '$zero': 0, '$at': 0, '$v0': 0, '$v1': 0,
+            '$a0': 0, '$a1': 0, '$a2': 0, '$a3': 0,
+            '$t0': 0, '$t1': 0, '$t2': 0, '$t3': 0,
+            '$t4': 0, '$t5': 0, '$t6': 0, '$t7': 0,
+            '$s0': 0, '$s1': 0, '$s2': 0, '$s3': 0,
+            '$s4': 0, '$s5': 0, '$s6': 0, '$s7': 0,
+            '$t8': 0, '$t9': 0, '$k0': 0, '$k1': 0,
+            '$gp': 0, '$sp': 0, '$fp': 0, '$ra': 0
+        },
+        'memoria': {
+            '0x00000000': 5, '0x00000004': 10, '0x00000008': 0
+        },
+        'config': config,
+        'tempo_total': 0
+    }
 
-botao_executar_tudo = tk.Button(frame_topo, text="Executar Tudo", command=lambda: executar_tudo(saida_text))
-botao_executar_tudo.pack(side=tk.LEFT, padx=5)
+    estado['registradores']['$s0'] = 0  # base para acessar memória
 
-janela.mainloop()
+    resultado = executar_tudo(estado)
+    for etapa in resultado['etapas']:
+        print(f"[PC={etapa['pc']}] {etapa['linha']} - {etapa['binario']} ({etapa['hex']}) - Tempo: {etapa['tempo_instrucao']} ciclos")
+
+    print("\n--- Estado final dos registradores ---")
+    for reg, val in resultado['registradores_finais'].items():
+        print(f"{reg}: {val}")
+
+    print("\n--- Estado final da memória ---")
+    for var, val in resultado['memoria_final'].items():
+        print(f"{var}: {val}")
+
+    print(f"\nTempo total de execução: {resultado['tempo_total']} ciclos (~{resultado['tempo_total_ms']:.9f} ms)")
